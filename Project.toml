@@ -1,0 +1,5 @@
+name = "Flips"
+uuid = "31f98e05-1996-4427-b556-a04b4343eaf7"
+authors = ["Parker J. Rule <parker.rule@tufts.edu>",
+           "Metric Geometry and Gerrymandering Group <contact@mggg.org>"]
+version = "0.1.0"
