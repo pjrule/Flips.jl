@@ -54,9 +54,10 @@ Determine if a flip proposal is valid with respect to a population constraint.
 """
 function valid(constraint::PopulationConstraint, graph::IndexedGraph,
                plan::Plan, flip::Flip)::Bool
-    @inbounds old_delta = plan.district_populations[flip.old_assignment] - flip.population
-    @inbounds new_delta = plan.district_populations[flip.new_assignment] + flip.population 
-    @inbounds return old_delta >= constraint.min_pop && new_delta <= constraint.max_pop
+    return (flip.left_pop >= constraint.min_pop &&
+            flip.left_pop <= constraint.max_pop &&
+            flip.right_pop >= constraint.min_pop &&
+            flip.right_pop <= constraint.max_pop)
 end
 
 """
@@ -103,7 +104,8 @@ end
 """
     ContiguityConstraint
 
-A contiguity constraint. Ensures that every district is connected.
+A single-flip contiguity constraint. Ensures that every district is connected
+for a single-flip proposal.
 """
 struct ContiguityConstraint <: AbstractConstraint
     # No metadata (for now); implements the `AbstractConstraint` interface.
@@ -119,6 +121,8 @@ function valid(constraint::ContiguityConstraint, graph::IndexedGraph,
     neighbors = flip.cut_delta.neighbors
     source_node = iterate(neighbors)[1]
     pop!(neighbors, source_node)
+    node = flip.nodes[0]
+    old_assignment = flip.old_assignments[0]
 
     @inbounds for target_node in neighbors
         visited = zeros(Bool, graph.n_nodes)
@@ -135,8 +139,8 @@ function valid(constraint::ContiguityConstraint, graph::IndexedGraph,
             for index in 1:graph.neighbors_per_node[curr_node]
                 neighbor = graph.node_neighbors[index, curr_node]
                 if (!visited[neighbor] && 
-                    plan.assignment[neighbor] == flip.old_assignment &&
-                    neighbor != flip.node)
+                    plan.assignment[neighbor] == old_assignment &&
+                    neighbor != node)
                     visited[neighbor] = true
                     enqueue!(queue, neighbor)
                 end

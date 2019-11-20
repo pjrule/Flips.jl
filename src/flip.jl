@@ -25,7 +25,7 @@ end
 """
     Flip
 
-Represents a single flip proposal in a chain run. Flips are intended to be passed to
+Represents a single state change in a chain run. Flips are intended to be passed to
 constraints to determine whether the proposal is valid. If the proposal is accepted,
 the plan is updated and the flip step is stored for the purpose of computing statistics.
 
@@ -38,13 +38,22 @@ For this reason, the `cut_delta` field can be `Nothing`. The `add_cut_delta` fun
 should be called to generate an augmented `Flip` once population constraints have been
 checked.
 """
-struct Flip
-    node::Int
-    population::Int
-    old_assignment::Int
-    new_assignment::Int
+abstract type AbstractFlip end
+
+struct Flip <: AbstractFlip
+    nodes::Array{Int}
+    populations::Array{Int}
+    left_district::Int
+    right_district::Int
+    left_pop::Int
+    right_pop::Int
+    old_assignments::Array{Int}
+    new_assignments::Array{Int}
     cut_delta::Union{CutDelta, Missing}
-    # TODO: weight
+    # TODO: weight/latency
+end
+
+struct DummyFlip <: AbstractFlip
 end
 
 """
@@ -53,21 +62,37 @@ end
 Return the `CutDelta` determined by a plan and a proposed flip step.
 """
 function CutDelta(flip::Flip, plan::Plan, graph::IndexedGraph)::CutDelta
+    altered_nodes = Dict{Int, Int}(node => index
+                                   for (index, node) in enumerate(flip.nodes))
     cut_edges_before = BitSet(Int[])
     cut_edges_after = BitSet(Int[])
     neighbors = BitSet(Int[])
-    @inbounds for index in 1:graph.neighbors_per_node[flip.node]
-        neighbor = graph.node_neighbors[index, flip.node]
-        if plan.assignment[neighbor] != flip.old_assignment
-            edge_index = graph.src_dst_to_edge[flip.node, neighbor]
-            push!(cut_edges_before, edge_index)
-        end
-        if plan.assignment[neighbor] != flip.new_assignment
-            edge_index = graph.src_dst_to_edge[flip.node, neighbor]
-            push!(cut_edges_after, edge_index)
-        end
-        if plan.assignment[neighbor] == flip.old_assignment
-            push!(neighbors, neighbor)
+    for node in union(plan.district_nodes[flip.left_district],
+                      plan.district_nodes[flip.right_district])
+        @inbounds for index in 1:graph.neighbors_per_node[node]
+            neighbor = graph.node_neighbors[index, node]
+            edge_index = graph.src_dst_to_edge[node, neighbor]
+            if ((plan.assignment[node] == flip.left_district &&
+                 plan.assignment[neighbor] == flip.right_district) ||
+                (plan.assignment[node] == flip.right_district &&
+                 plan.assignment[neighbor] == flip.left_district))
+                push!(cut_edges_before, edge_index)
+            end
+
+            if node in keys(altered_nodes)
+                node_index = altered_nodes[node]
+                if neighbor in keys(altered_nodes)
+                    neighbor_index = altered_nodes[neighbor]
+                    if (flip.new_assignments[node_index] !=
+                        flip.new_assignments[neighbor_index])
+                        push!(cut_edges_after, edge_index)
+                    end
+                else
+                    if flip.new_assignments[node_index] != plan.assignment[neighbor]
+                        push!(cut_edges_after, edge_index)
+                    end
+                end
+            end
         end
     end
     Δ = length(cut_edges_after) - length(cut_edges_before)
@@ -77,13 +102,13 @@ end
 
 
 """
-    random_flip(graph, plan)
+    random_single_flip(graph, plan)
 
 Propose a random flip of a node from one district to another by randomly selecting
 a cut edge. This is equivalent to `propose_random_flip` in GerryChain. The `cut_delta`
 field is not populated.
 """
-function random_flip(graph::IndexedGraph, plan::Plan, twister::MersenneTwister)::Flip
+function random_single_flip(graph::IndexedGraph, plan::Plan, twister::MersenneTwister)::Flip
     edge_index = rand(twister, plan.cut_edges)
     edge_side = rand(Int[1, 2])
     @inbounds node = graph.edges[edge_side, edge_index]
@@ -91,7 +116,10 @@ function random_flip(graph::IndexedGraph, plan::Plan, twister::MersenneTwister):
     @inbounds old_assignment = plan.assignment[node]
     @inbounds adj_node = graph.edges[3 - edge_side, edge_index]
     @inbounds new_assignment = plan.assignment[adj_node]
-    return Flip(node, node_pop, old_assignment, new_assignment, Missing())
+    return Flip([node], [node_pop], old_assignment, new_assignment,
+                plan.district_population[old_assignment] - node_pop,
+                plan.district_populations[new_assignment] + node_pop,
+                [old_assignment], [new_assignment], Missing())
 end
 
 """
@@ -101,6 +129,7 @@ Return an augmented version of a `Flip` with the `cut_delta` field populated.
 """
 function add_cut_delta(flip::Flip, graph::IndexedGraph, plan::Plan)::Flip
     cut_delta = CutDelta(flip, plan, graph)
-    return Flip(flip.node, flip.population, flip.old_assignment,
-                flip.new_assignment, cut_delta)
+    return Flip(flip.nodes, flip.populations, flip.left_district,
+                flip.right_district, flip.left_pop, flip.right_pop,
+                flip.old_assignments, flip.new_assignments, cut_delta)
 end

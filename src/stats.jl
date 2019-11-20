@@ -36,11 +36,13 @@ function generate(stat::VoteShareStat, graph::IndexedGraph, plan::Plan,
     end
 
     @inbounds for (index, flip) in enumerate(flips_buffer)
-        district_populations[flip.old_assignment] -= flip.population
-        district_populations[flip.new_assignment] += flip.population
-        node_voters = graph.attributes[flip.node][stat.column]
-        district_voter_counts[flip.old_assignment] -= node_voters
-        district_voter_counts[flip.new_assignment] += node_voters
+        district_populations[flip.left_district] = flip.left_pop
+        district_populations[flip.left_district] = flip.right_pop
+        for (node_index, node) in enumerate(flip.nodes)
+            node_voters = graph.attributes[node][stat.column]
+            district_voter_counts[flip.old_assignments[node_index]] -= node_voters
+            district_voter_counts[flip.new_assignments[node_index]] += node_voters
+        end
         shares[:, index] = (1.0 * district_voter_counts) ./ district_populations
     end
 
