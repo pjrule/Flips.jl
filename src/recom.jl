@@ -1,12 +1,12 @@
-function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
-                          twister::MersenneTwister)::Union{Flip, DummyFlip}
+function recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
+               twister::MersenneTwister)::Union{Flip, DummyFlip}
     # Step 1: Choose a random district pairing.
     # IIRC, Sarah said that a non-adjacent district pairing counts as a step.
     # (I would like to understand precisely why.)
     left_district = rand(twister, 1:plan.n_districts)
     right_district = rand(twister, 1:plan.n_districts)
     if plan.district_adj[left_district, right_district] == 0
-        return DummyFlip()
+        return DummyFlip("non-adjacent district pair")
     end
     # Step 2: Sample a spanning tree.
     mst_edges = random_mst(graph, plan, left_district, right_district, twister)
@@ -15,7 +15,7 @@ function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop
                          mst_edges, min_pop, max_pop)
     # If the spanning tree does not induce any ϵ-balanced cuts, return a dummy step.
     if isempty(cuts)
-        return DummyFlip()
+        return DummyFlip("no balanced cut")
     end
     # Otherwise, accept an edge with probability 1/E(A, B), where E(A, B) is the seam
     # length (number of cut edges) between the two districts formed.
@@ -45,19 +45,54 @@ function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop
             left_pop -= populations[index]
         end
     end
-    flip = add_cut_delta(Flip(nodes, populations, left_district, right_district,
+    return add_cut_delta(Flip(nodes, populations, left_district, right_district,
                               left_pop, right_pop, old_assignments,
                               new_assignments, missing), graph, plan)
-    seam_length = plan.district_adj[left_district, right_district] + flip.cut_delta.Δ
-    println("seam length is ", seam_length)
-    if rand(twister) < 1 / seam_length
-        println("*** ACCEPTED ***")
-        println("cutting along ", mst_cut_edge)
-        println("MST is ", mst_edges)
-        return flip  # accept with probability 1 / seam_length
+end
+
+function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
+                          twister::MersenneTwister)::Union{Flip, DummyFlip}
+    flip = recom(graph, plan, min_pop, max_pop, twister)
+    if flip isa Flip
+        left = flip.left_district
+        right = flip.right_district
+        seam_length = plan.district_adj[left, right] + flip.cut_delta.Δ
+        if rand(twister) < 1 / seam_length
+            return flip  # accept with probability 1 / seam_length
+        else
+            return DummyFlip("seam length rejection")
+        end
     end
-    println("rejecting...")
-    return DummyFlip()  # reject with probability 1 - (1 / seam_length)
+    return flip  # DummyFlip with reason
+end
+
+function until_step(graph::IndexedGraph, plan::Plan, proposal::Function,
+                    min_pop::Int, max_pop::Int,
+                    twister::MersenneTwister)::Tuple{Flip, Int, Dict{AbstractString, Int}}
+    self_loops = 0
+    flip = proposal(graph, plan, min_pop, max_pop, twister)
+    reasons = DefaultDict{AbstractString, Int}(0)
+    while flip isa DummyFlip
+        self_loops += 1
+        reasons[flip.reason] += 1
+        flip = proposal(graph, plan, min_pop, max_pop, twister)
+    end
+    return flip, self_loops, Dict(reasons)
+end
+
+function recom_until_step(graph::IndexedGraph, plan::Plan, 
+                          min_pop::Int, max_pop::Int,
+                          twister::MersenneTwister)::Tuple{Flip, Int,
+                                                           Dict{AbstractString, Int}}
+    return until_step(graph, plan, recom, min_pop, max_pop, twister)
+end
+
+function reversible_recom_until_step(graph::IndexedGraph, plan::Plan,
+                                     min_pop::Int, max_pop::Int,
+                                     twister::MersenneTwister)::Tuple{Flip, Int,
+                                                                      Dict{AbstractString,
+                                                                           Int}}
+    return until_step(graph, plan, reversible_recom, min_pop, max_pop, twister)
 end
 
 function cut_assignment(graph::IndexedGraph, plan::Plan, left_district::Int,
@@ -132,16 +167,8 @@ function random_mst(graph::IndexedGraph, plan::Plan,
                     twister::MersenneTwister)::BitSet
     # Modified version of the Kruskal's algorithm implementation in LightGraphs.
     edges = BitSet([])
-    for edge in plan.district_edges[left_district]
-        src, dst = graph.edges[:, edge]
-        if (plan.assignment[src] == left_district ||
-            plan.assignment[src] == right_district) &&
-           (plan.assignment[dst] == left_district ||
-            plan.assignment[dst] == right_district)
-           push!(edges, edge)
-       end
-    end
-    for edge in plan.district_edges[right_district]
+    for edge in union(plan.district_edges[left_district],
+                      plan.district_edges[right_district])
         src, dst = graph.edges[:, edge]
         if (plan.assignment[src] == left_district ||
             plan.assignment[src] == right_district) &&
@@ -157,7 +184,7 @@ function random_mst(graph::IndexedGraph, plan::Plan,
     edge_indices::Array{Int} = [edge for edge in edges]
     weights = rand(twister, n_edges)
     
-    connected = IntDisjointSets(maximum(edges))  # TODO: make this more efficient?
+    connected = IntDisjointSets(graph.n_nodes)  # TODO: make this more efficient?
     mst = BitSet([])
     mst_index = 0
     for edge in edge_indices[sortperm(weights)]
@@ -171,6 +198,7 @@ function random_mst(graph::IndexedGraph, plan::Plan,
             end
         end
     end
+    @assert length(mst) == mst_size
     return mst
 end
 
@@ -182,7 +210,8 @@ function balanced_cuts(graph::IndexedGraph, plan::Plan, left_district::Int,
     pops = all_pops(graph, mst_edges, mst_pop)
     ϵ_balanced = BitSet([])
     for (edge, pop) in pops
-        if pop >= min_pop && pop <= max_pop
+        inv_pop = mst_pop - pop
+        if pop >= min_pop && pop <= max_pop && inv_pop >= min_pop && inv_pop <= max_pop
             push!(ϵ_balanced, edge)
         end
     end
@@ -190,12 +219,16 @@ function balanced_cuts(graph::IndexedGraph, plan::Plan, left_district::Int,
 end
 
 function all_pops(graph::IndexedGraph, mst_edges::BitSet, mst_pop::Int)
-    return Dict{Int, Int}(edge => pop(graph, mst_edges, mst_pop, edge, 1)
+    cache = Dict{Tuple{Int, Int}, Int}()
+    return Dict{Int, Int}(edge => pop(graph, mst_edges, mst_pop, edge, 1, cache)
                           for edge in mst_edges)
 end
 
-@memoize Dict function pop(graph::IndexedGraph, mst_edges::BitSet, mst_pop::Int,
-                           start_edge::Int, side::Int)::Int
+function pop(graph::IndexedGraph, mst_edges::BitSet, mst_pop::Int,
+             start_edge::Int, side::Int, cache::Dict{Tuple{Int, Int}, Int})::Int
+    if (start_edge, side) in keys(cache)
+        return cache[(start_edge, side)]
+    end
     next_node = graph.edges[side, start_edge]
     avoid = graph.edges[3 - side, start_edge]
     neighbors = BitSet([])
@@ -216,11 +249,20 @@ end
             if neighbor_edge[1] == next_node
                 neighbor_side = 2
             end
-            sub_pop += pop(graph, mst_edges, mst_pop,
-                           graph.src_dst_to_edge[next_node, neighbor], neighbor_side)
+            if (start_edge, side) in keys(cache)
+                sub_pop += cache[(start_edge, side)]
+            else
+                sub_pop += pop(graph, mst_edges, mst_pop,
+                               graph.src_dst_to_edge[next_node, neighbor],
+                               neighbor_side, cache)
+            end
         end
+        cache[(start_edge, side)] = sub_pop
+        cache[(start_edge, 3 - side)] = mst_pop - sub_pop
         return sub_pop
     else  # Leaf node
+        cache[(start_edge, side)] = graph.population[next_node]
+        cache[(start_edge, 3 - side)] = mst_pop - graph.population[next_node]
         return graph.population[next_node]
     end
 end

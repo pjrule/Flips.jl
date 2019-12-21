@@ -1,5 +1,13 @@
 name = "Flips"
 uuid = "31f98e05-1996-4427-b556-a04b4343eaf7"
-authors = ["Parker J. Rule <parker.rule@tufts.edu>",
-           "Metric Geometry and Gerrymandering Group <contact@mggg.org>"]
+authors = ["Parker J. Rule <parker.rule@tufts.edu>", "Metric Geometry and Gerrymandering Group <contact@mggg.org>"]
 version = "0.1.0"
+
+[deps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
+Memoize = "c03570c3-d221-55d1-a50c-7939bbd78826"
+MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"

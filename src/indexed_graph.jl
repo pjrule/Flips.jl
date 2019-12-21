@@ -57,7 +57,7 @@ function IndexedGraph(raw::Dict, pop_col::AbstractString)::IndexedGraph
         src_dst_to_edge[dst(edge), src(edge)] = index
     end
 
-    node_neighbors = zeros(Int, 5, n_nodes) # Every node in a planar graph has degree ≦5.
+    node_neighbors = zeros(Int, 20, n_nodes) # TODO: fix this constant
     neighbors_per_node = zeros(Int, n_nodes)
     for index in 1:n_nodes
         for (neighbor_idx, neighbor) in enumerate(neighbors(graph, index))

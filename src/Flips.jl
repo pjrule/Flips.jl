@@ -6,32 +6,34 @@ using MetaGraphs
 using SparseArrays
 using DataStructures
 using JSON
-using Memoize
+using Memoize 
 
 abstract type AbstractStat end
 
 export
     Flips,
-    DummyFlip,  # TODO: remove?
-    update!,  # TODO: remove
     Flip,
+    DummyFlip,  # TODO: remove?
+    AbstractFlip,
+    update!,  # TODO: remove?
     Plan,
     IndexedGraph,
-    ChainConfig,
-    run_chain!,
+    recom,
+    recom_until_step,
     reversible_recom,
+    reversible_recom_until_step,
     random_mst,
     balanced_cuts,
     cut_assignment,
-    traverse_mst
+    traverse_mst,
+    pychain
 
 
 include("./indexed_graph.jl")
 include("./plan.jl")
 include("./flip.jl")
 include("./constraints.jl")
-include("./chain_config.jl")
 include("./chain.jl")
-include("./stats.jl")
 include("./recom.jl")
+include("./pychain.jl")
 end # module

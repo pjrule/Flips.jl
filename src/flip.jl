@@ -54,6 +54,11 @@ struct Flip <: AbstractFlip
 end
 
 struct DummyFlip <: AbstractFlip
+    reason::AbstractString
+end
+
+function DummyFlip()::DummyFlip
+    return DummyFlip("")
 end
 
 """
@@ -97,29 +102,6 @@ function CutDelta(flip::Flip, plan::Plan, graph::IndexedGraph)::CutDelta
     end
     Δ = length(cut_edges_after) - length(cut_edges_before)
     return CutDelta(cut_edges_before, cut_edges_after, neighbors, Δ)
-end
-
-
-
-"""
-    random_single_flip(graph, plan)
-
-Propose a random flip of a node from one district to another by randomly selecting
-a cut edge. This is equivalent to `propose_random_flip` in GerryChain. The `cut_delta`
-field is not populated.
-"""
-function random_single_flip(graph::IndexedGraph, plan::Plan, twister::MersenneTwister)::Flip
-    edge_index = rand(twister, plan.cut_edges)
-    edge_side = rand(Int[1, 2])
-    @inbounds node = graph.edges[edge_side, edge_index]
-    @inbounds node_pop = graph.population[node]
-    @inbounds old_assignment = plan.assignment[node]
-    @inbounds adj_node = graph.edges[3 - edge_side, edge_index]
-    @inbounds new_assignment = plan.assignment[adj_node]
-    return Flip([node], [node_pop], old_assignment, new_assignment,
-                plan.district_population[old_assignment] - node_pop,
-                plan.district_populations[new_assignment] + node_pop,
-                [old_assignment], [new_assignment], Missing())
 end
 
 """
