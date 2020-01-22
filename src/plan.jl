@@ -17,17 +17,7 @@ mutable struct Plan
     n_cut_edges::Int
 end
 
-"""
-    Plan(graph, assignment_col)
-
-Create a new plan using data stored in `graph`. The assignment of each node
-is loaded from the column `assignment_col` in the metadata of `graph`. 
-"""
-function Plan(graph::IndexedGraph, assignment_col::AbstractString)::Plan
-    assignment = zeros(Int, graph.n_nodes)
-    for index in 1:graph.n_nodes
-        assignment[index] = graph.attributes[index][assignment_col]
-    end
+function Plan(graph::IndexedGraph, assignment::Array{Int})::Plan
     n_districts = maximum(assignment) - minimum(assignment) + 1
     district_populations = zeros(Int, n_districts)
     for (index, node_pop) in enumerate(graph.population)
@@ -53,4 +43,18 @@ function Plan(graph::IndexedGraph, assignment_col::AbstractString)::Plan
     return Plan(n_districts, assignment, district_populations,
                 district_nodes, district_edges, district_adj,
                 cut_edges, length(cut_edges))
+end
+
+"""
+    Plan(graph, assignment_col)
+
+Create a new plan using data stored in `graph`. The assignment of each node
+is loaded from the column `assignment_col` in the metadata of `graph`.
+"""
+function Plan(graph::IndexedGraph, assignment_col::AbstractString)::Plan
+    assignment = zeros(Int, graph.n_nodes)
+    for index in 1:graph.n_nodes
+        assignment[index] = graph.attributes[index][assignment_col]
+    end
+    return Plan(graph, assignment)
 end
