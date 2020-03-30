@@ -10,8 +10,10 @@ function pychain(graph::IndexedGraph, plan::Plan, n_steps::Int, reversible::Bool
     step_count = 0
     initial_assignment = Dict(node - 1 => assignment for (node, assignment)
                               in enumerate(plan.assignment))
+    max_balanced_cuts = 0
     while step_count < n_steps
         flip, self_loops, reasons = proposal(graph, plan, min_pop, max_pop, twister)
+        max_balanced_cuts = maximum(max_balanced_cuts, flip.balanced_cuts)
         update!(plan, graph, flip)
         # Use Python indexing
         pyflip = Dict(node - 1 => assignment for (node, assignment)
@@ -23,5 +25,6 @@ function pychain(graph::IndexedGraph, plan::Plan, n_steps::Int, reversible::Bool
         step_count += (self_loops + 1)
     end
     return Dict("initial_assignment" => initial_assignment,
-                "steps" => steps)
+                "steps" => steps,
+                "max_balanced_cuts" => max_balanced_cuts)
 end

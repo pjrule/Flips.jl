@@ -50,6 +50,7 @@ struct Flip <: AbstractFlip
     old_assignments::Array{Int}
     new_assignments::Array{Int}
     cut_delta::Union{CutDelta, Missing}
+    balanced_cuts::Int
     # TODO: weight/latency
 end
 

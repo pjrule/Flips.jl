@@ -47,7 +47,7 @@ function recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
     end
     return add_cut_delta(Flip(nodes, populations, left_district, right_district,
                               left_pop, right_pop, old_assignments,
-                              new_assignments, missing), graph, plan)
+                              new_assignments, missing, length(cuts)), graph, plan)
 end
 
 function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
