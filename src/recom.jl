@@ -1,5 +1,5 @@
 function recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
-               twister::MersenneTwister)::Union{Flip, DummyFlip}
+               twister::MersenneTwister; kwargs...)::Union{Flip, DummyFlip}
     # Step 1: Choose a random district pairing.
     # IIRC, Sarah said that a non-adjacent district pairing counts as a step.
     # (I would like to understand precisely why.)
@@ -51,13 +51,18 @@ function recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
 end
 
 function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop::Int,
-                          twister::MersenneTwister)::Union{Flip, DummyFlip}
+                          twister::MersenneTwister; kwargs...)::Union{Flip, DummyFlip}
     flip = recom(graph, plan, min_pop, max_pop, twister)
+    if haskey(kwargs, :M)
+        M = kwargs[:M]
+    else
+        M = 1
+    end
     if flip isa Flip
         left = flip.left_district
         right = flip.right_district
         seam_length = plan.district_adj[left, right] + flip.cut_delta.Δ
-        if rand(twister) < 1 / seam_length
+        if rand(twister) < 1 / M * seam_length
             return flip  # accept with probability 1 / seam_length
         else
             return DummyFlip("seam length rejection")
@@ -67,32 +72,29 @@ function reversible_recom(graph::IndexedGraph, plan::Plan, min_pop::Int, max_pop
 end
 
 function until_step(graph::IndexedGraph, plan::Plan, proposal::Function,
-                    min_pop::Int, max_pop::Int,
-                    twister::MersenneTwister)::Tuple{Flip, Int, Dict{AbstractString, Int}}
+                    min_pop::Int, max_pop::Int, twister::MersenneTwister;
+                    kwargs...)::Tuple{Flip, Int, Dict{AbstractString, Int}}
     self_loops = 0
     flip = proposal(graph, plan, min_pop, max_pop, twister)
     reasons = DefaultDict{AbstractString, Int}(0)
     while flip isa DummyFlip
         self_loops += 1
         reasons[flip.reason] += 1
-        flip = proposal(graph, plan, min_pop, max_pop, twister)
+        flip = proposal(graph, plan, min_pop, max_pop, twister; kwargs...)
     end
     return flip, self_loops, Dict(reasons)
 end
 
 function recom_until_step(graph::IndexedGraph, plan::Plan, 
-                          min_pop::Int, max_pop::Int,
-                          twister::MersenneTwister)::Tuple{Flip, Int,
-                                                           Dict{AbstractString, Int}}
-    return until_step(graph, plan, recom, min_pop, max_pop, twister)
+                          min_pop::Int, max_pop::Int, twister::MersenneTwister;
+                          kwargs...)::Tuple{Flip, Int, Dict{AbstractString, Int}}
+    return until_step(graph, plan, recom, min_pop, max_pop, twister; kwargs...)
 end
 
 function reversible_recom_until_step(graph::IndexedGraph, plan::Plan,
-                                     min_pop::Int, max_pop::Int,
-                                     twister::MersenneTwister)::Tuple{Flip, Int,
-                                                                      Dict{AbstractString,
-                                                                           Int}}
-    return until_step(graph, plan, reversible_recom, min_pop, max_pop, twister)
+                                     min_pop::Int, max_pop::Int, twister::MersenneTwister;
+                                     kwargs...)::Tuple{Flip, Int, Dict{AbstractString, Int}}
+    return until_step(graph, plan, reversible_recom, min_pop, max_pop, twister; kwargs...)
 end
 
 function cut_assignment(graph::IndexedGraph, plan::Plan, left_district::Int,

@@ -114,5 +114,6 @@ function add_cut_delta(flip::Flip, graph::IndexedGraph, plan::Plan)::Flip
     cut_delta = CutDelta(flip, plan, graph)
     return Flip(flip.nodes, flip.populations, flip.left_district,
                 flip.right_district, flip.left_pop, flip.right_pop,
-                flip.old_assignments, flip.new_assignments, cut_delta)
+                flip.old_assignments, flip.new_assignments, cut_delta,
+                flip.balanced_cuts)
 end
